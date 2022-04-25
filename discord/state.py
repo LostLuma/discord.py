@@ -113,7 +113,7 @@ class ChunkRequest:
         self.cache: bool = cache
         self.nonce: str = os.urandom(16).hex()
         self.buffer: List[Member] = []
-        self.waiters: List[asyncio.Future[List[Member]]] = []
+        self.waiters: List[asyncio.Future[None]] = []
 
     def add_members(self, members: List[Member]) -> None:
         self.buffer.extend(members)
@@ -131,11 +131,12 @@ class ChunkRequest:
         future = self.loop.create_future()
         self.waiters.append(future)
         try:
-            return await future
+            await future
+            return self.buffer
         finally:
             self.waiters.remove(future)
 
-    def get_future(self) -> asyncio.Future[List[Member]]:
+    def get_future(self) -> asyncio.Future[None]:
         future = self.loop.create_future()
         self.waiters.append(future)
         return future
@@ -143,7 +144,7 @@ class ChunkRequest:
     def done(self) -> None:
         for future in self.waiters:
             if not future.done():
-                future.set_result(self.buffer)
+                future.set_result(None)
 
 
 _log = logging.getLogger(__name__)
@@ -1082,12 +1083,12 @@ class ConnectionState:
     @overload
     async def chunk_guild(
         self, guild: Guild, *, wait: Literal[False] = ..., cache: Optional[bool] = ...
-    ) -> asyncio.Future[List[Member]]:
+    ) -> asyncio.Future[None]:
         ...
 
     async def chunk_guild(
         self, guild: Guild, *, wait: bool = True, cache: Optional[bool] = None
-    ) -> Union[List[Member], asyncio.Future[List[Member]]]:
+    ) -> Union[List[Member], asyncio.Future[None]]:
         cache = cache or self.member_cache_flags.joined
         request = self._chunk_requests.get(guild.id)
         if request is None:
