@@ -249,7 +249,7 @@ def handle_message_parameters(
             multipart.append(
                 {
                     'name': f'files[{index}]',
-                    'value': file.fp,
+                    'value': file._get_fp(),
                     'filename': file.filename,
                     'content_type': 'application/octet-stream',
                 }
@@ -1288,10 +1288,13 @@ class HTTPClient:
             Route('GET', '/guilds/{guild_id}/stickers/{sticker_id}', guild_id=guild_id, sticker_id=sticker_id)
         )
 
-    def create_guild_sticker(
+    async def create_guild_sticker(
         self, guild_id: Snowflake, payload: Dict[str, Any], file: File, reason: Optional[str]
-    ) -> Response[sticker.GuildSticker]:
-        initial_bytes = file.fp.read(16)
+    ) -> sticker.GuildSticker:
+        fp = file._get_fp()
+
+        initial_bytes = await utils.maybe_coroutine(fp.read, 16)
+        file.reset()
 
         try:
             mime_type = utils._get_mime_type_for_image(initial_bytes)
@@ -1306,7 +1309,7 @@ class HTTPClient:
         form: List[Dict[str, Any]] = [
             {
                 'name': 'file',
-                'value': file.fp,
+                'value': fp,
                 'filename': file.filename,
                 'content_type': mime_type,
             }
@@ -1320,7 +1323,7 @@ class HTTPClient:
                 }
             )
 
-        return self.request(
+        return await self.request(
             Route('POST', '/guilds/{guild_id}/stickers', guild_id=guild_id), form=form, files=[file], reason=reason
         )
 

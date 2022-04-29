@@ -23,12 +23,14 @@ DEALINGS IN THE SOFTWARE.
 """
 
 from __future__ import annotations
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Tuple, Union
 
 import os
 import io
 
-from .utils import MISSING
+import aiohttp
+
+from .utils import MISSING, _CachedStreamReader
 
 # fmt: off
 __all__ = (
@@ -56,10 +58,10 @@ class File:
 
     Attributes
     -----------
-    fp: Union[:class:`os.PathLike`, :class:`io.BufferedIOBase`]
-        A file-like object opened in binary mode and read mode
-        or a filename representing a file in the hard drive to
-        open.
+    fp: Union[:class:`os.PathLike`, :class:`io.BufferedIOBase`, :class:`aiohttp.StreamReader`]
+        A file-like object opened in binary mode and read mode,
+        a filename representing a file in the hard drive to open,
+        or an active :class:`aiohttp.StreamReader`.
 
         .. note::
 
@@ -79,9 +81,16 @@ class File:
 
     __slots__ = ('fp', '_filename', 'spoiler', 'description', '_original_pos', '_owner', '_closer')
 
+    if TYPE_CHECKING:
+        fp: Union[io.BufferedIOBase, aiohttp.StreamReader]
+        _original_pos: int
+        _owner: bool
+        _closer: Optional[Callable[[], None]]
+        _filename: str
+
     def __init__(
         self,
-        fp: Union[str, bytes, os.PathLike[Any], io.BufferedIOBase],
+        fp: Union[str, bytes, os.PathLike[Any], io.BufferedIOBase, aiohttp.StreamReader],
         filename: Optional[str] = None,
         *,
         spoiler: bool = MISSING,
@@ -90,8 +99,12 @@ class File:
         if isinstance(fp, io.IOBase):
             if not (fp.seekable() and fp.readable()):
                 raise ValueError(f'File buffer {fp!r} must be seekable and readable')
-            self.fp: io.BufferedIOBase = fp
+            self.fp = fp
             self._original_pos = fp.tell()
+            self._owner = False
+        elif isinstance(fp, aiohttp.StreamReader):
+            self.fp = fp
+            self._original_pos = 0
             self._owner = False
         else:
             self.fp = open(fp, 'rb')
@@ -102,8 +115,11 @@ class File:
         # read and close, since I want to control when the files
         # close, I need to stub it so it doesn't close unless
         # I tell it to
-        self._closer = self.fp.close
-        self.fp.close = lambda: None
+        if isinstance(self.fp, io.IOBase):
+            self._closer = self.fp.close
+            self.fp.close = lambda: None
+        else:
+            self._closer = None
 
         if filename is None:
             if isinstance(fp, str):
@@ -139,13 +155,14 @@ class File:
         # is 0, and thus false, then this prevents an
         # unnecessary seek since it's the first request
         # done.
-        if seek:
-            self.fp.seek(self._original_pos)
+        if seek and self._closer:
+            self.fp.seek(self._original_pos)  # type: ignore  # Can't seek StreamReader
 
     def close(self) -> None:
-        self.fp.close = self._closer
-        if self._owner:
-            self._closer()
+        if isinstance(self.fp, io.IOBase) and self._closer:
+            self.fp.close = self._closer
+            if self._owner:
+                self._closer()
 
     def to_dict(self, index: int) -> Dict[str, Any]:
         payload = {
@@ -157,3 +174,8 @@ class File:
             payload['description'] = self.description
 
         return payload
+
+    def _get_fp(self) -> Union[io.IOBase, _CachedStreamReader]:
+        if isinstance(self.fp, io.IOBase):
+            return self.fp
+        return _CachedStreamReader(self.fp)

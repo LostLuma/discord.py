@@ -64,6 +64,7 @@ import re
 import sys
 import types
 import warnings
+import aiohttp
 
 import yarl
 
@@ -1150,3 +1151,39 @@ def format_dt(dt: datetime.datetime, /, style: Optional[TimestampStyle] = None) 
     if style is None:
         return f'<t:{int(dt.timestamp())}>'
     return f'<t:{int(dt.timestamp())}:{style}>'
+
+
+class _CachedStreamReader:
+    """Internal class which caches the data from a StreamReader
+    to allow retrying requests with attachments."""
+
+    __slots__ = ('reader', 'buffer', 'done')
+
+    def __init__(self, reader: aiohttp.StreamReader, /) -> None:
+        self.reader: aiohttp.StreamReader = reader
+
+        self.done: bool = False
+        self.buffer: bytes = b''
+
+    def __aiter__(self) -> AsyncIterable[bytes]:
+        return _read_stream(self)
+
+    async def read(self, n: Optional[int] = None, /) -> bytes:
+        if not self.done:
+            await self._read(n)
+        return self.buffer[:n]
+
+    async def _read(self, n: Optional[int] = None, /) -> None:
+        if n is None:
+            self.buffer += await self.reader.read()
+            self.done = True
+        else:
+            remaining = len(self.buffer) - n
+
+            if remaining:
+                self.buffer += await self.reader.read(remaining)
+
+
+async def _read_stream(reader: _CachedStreamReader, /) -> AsyncIterable[bytes]:
+    """Allows reading the reader's data once for use in form data."""
+    yield await reader.read()
