@@ -24,7 +24,7 @@ DEALINGS IN THE SOFTWARE.
 
 from __future__ import annotations
 
-from typing import List, Literal, TypedDict, Union
+from typing import Generic, List, Literal, TypeVar, TypedDict, Union
 from typing_extensions import NotRequired
 
 from .emoji import PartialEmoji
@@ -35,9 +35,12 @@ ButtonStyle = Literal[1, 2, 3, 4, 5]
 TextStyle = Literal[1, 2]
 
 
-class ActionRow(TypedDict):
+_ActionRowChildT_co = TypeVar('_ActionRowChildT_co', covariant=True, default='ActionRowChildComponent')
+
+
+class ActionRow(TypedDict, Generic[_ActionRowChildT_co]):
     type: Literal[1]
-    components: List[ActionRowChildComponent]
+    components: List[_ActionRowChildT_co]
 
 
 class ButtonComponent(TypedDict):

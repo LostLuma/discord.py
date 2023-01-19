@@ -74,11 +74,12 @@ if TYPE_CHECKING:
         MessageApplication as MessageApplicationPayload,
         MessageActivity as MessageActivityPayload,
         RoleSubscriptionData as RoleSubscriptionDataPayload,
+        MessageComponent as MessageComponentPayload,
     )
 
     from .types.interactions import MessageInteraction as MessageInteractionPayload
 
-    from .types.components import Component as ComponentPayload
+    from .types.components import ActionRow as ActionRowPayload
     from .types.threads import ThreadArchiveDuration
     from .types.member import (
         Member as MemberPayload,
@@ -89,7 +90,7 @@ if TYPE_CHECKING:
     from .types.gateway import MessageReactionRemoveEvent, MessageUpdateEvent
     from .abc import Snowflake
     from .abc import GuildChannel, MessageableChannel
-    from .components import ActionRow, ActionRowChildComponentType
+    from .components import ActionRow, Button, SelectMenu
     from .state import ConnectionState
     from .channel import TextChannel
     from .mentions import AllowedMentions
@@ -98,7 +99,7 @@ if TYPE_CHECKING:
     from .ui.view import View
 
     EmojiInputType = Union[Emoji, PartialEmoji, str]
-    MessageComponentType = Union[ActionRow, ActionRowChildComponentType]
+    MessageComponentType = ActionRow[Union[Button, SelectMenu]]
 
 
 __all__ = (
@@ -1737,7 +1738,7 @@ class Message(PartialMessage, Hashable):
                 if role is not None:
                     self.role_mentions.append(role)
 
-    def _handle_components(self, data: List[ComponentPayload]) -> None:
+    def _handle_components(self, data: List[ActionRowPayload[MessageComponentPayload]]) -> None:
         self.components = []
 
         for component_data in data:

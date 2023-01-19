@@ -33,7 +33,7 @@ from .user import User
 from .emoji import PartialEmoji
 from .embed import Embed
 from .channel import ChannelType
-from .components import Component
+from .components import ActionRow, ButtonComponent, SelectMenu
 from .interactions import MessageInteraction
 from .sticker import StickerItem
 
@@ -105,6 +105,9 @@ MessageType = Literal[
 ]
 
 
+MessageComponent = Union[ButtonComponent, SelectMenu]
+
+
 class Message(PartialMessage):
     id: Snowflake
     author: User
@@ -132,7 +135,7 @@ class Message(PartialMessage):
     sticker_items: NotRequired[List[StickerItem]]
     referenced_message: NotRequired[Optional[Message]]
     interaction: NotRequired[MessageInteraction]
-    components: NotRequired[List[Component]]
+    components: NotRequired[List[ActionRow[MessageComponent]]]
     role_subscription_data: NotRequired[RoleSubscriptionData]
 
 

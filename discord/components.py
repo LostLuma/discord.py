@@ -24,7 +24,7 @@ DEALINGS IN THE SOFTWARE.
 
 from __future__ import annotations
 
-from typing import ClassVar, List, Literal, Optional, TYPE_CHECKING, Tuple, Union, overload
+from typing import ClassVar, Generic, List, Literal, Optional, TYPE_CHECKING, Tuple, TypeVar, Union, overload
 from .enums import try_enum, ComponentType, ButtonStyle, TextStyle, ChannelType
 from .utils import get_slots, MISSING
 from .partial_emoji import PartialEmoji, _EmojiTag
@@ -41,9 +41,8 @@ if TYPE_CHECKING:
         TextInput as TextInputPayload,
         ActionRowChildComponent as ActionRowChildComponentPayload,
     )
+    from .types.message import MessageComponent as MessageComponentPayload
     from .emoji import Emoji
-
-    ActionRowChildComponentType = Union['Button', 'SelectMenu', 'TextInput']
 
 
 __all__ = (
@@ -100,7 +99,11 @@ class Component:
         raise NotImplementedError
 
 
-class ActionRow(Component):
+_ActionRowChildComponentType = Union['Button', 'SelectMenu', 'TextInput']
+_ChildComponentT_co = TypeVar('_ChildComponentT_co', bound=_ActionRowChildComponentType, covariant=True, default=_ActionRowChildComponentType)
+
+
+class ActionRow(Component, Generic[_ChildComponentT_co]):
     """Represents a Discord Bot UI Kit Action Row.
 
     This is a component that holds up to 5 children components in a row.
@@ -120,13 +123,13 @@ class ActionRow(Component):
     __repr_info__: ClassVar[Tuple[str, ...]] = __slots__
 
     def __init__(self, data: ActionRowPayload, /) -> None:
-        self.children: List[ActionRowChildComponentType] = []
+        self.children: List[_ChildComponentT_co] = []
 
         for component_data in data.get('components', []):
             component = _component_factory(component_data)
 
             if component is not None:
-                self.children.append(component)
+                self.children.append(component)  # type: ignore
 
     @property
     def type(self) -> Literal[ComponentType.action_row]:
@@ -513,16 +516,21 @@ class TextInput(Component):
 
 
 @overload
-def _component_factory(data: ActionRowChildComponentPayload) -> Optional[ActionRowChildComponentType]:
+def _component_factory(data: ActionRowPayload[MessageComponentPayload]) -> ActionRow[Union[Button, SelectMenu]]:
     ...
 
 
 @overload
-def _component_factory(data: ComponentPayload) -> Optional[Union[ActionRow, ActionRowChildComponentType]]:
+def _component_factory(data: ActionRowChildComponentPayload) -> Optional[_ActionRowChildComponentType]:
     ...
 
 
-def _component_factory(data: ComponentPayload) -> Optional[Union[ActionRow, ActionRowChildComponentType]]:
+@overload
+def _component_factory(data: ComponentPayload) -> Optional[Union[ActionRow, _ActionRowChildComponentType]]:
+    ...
+
+
+def _component_factory(data: ComponentPayload) -> Optional[Union[ActionRow, _ActionRowChildComponentType]]:
     if data['type'] == 1:
         return ActionRow(data)
     elif data['type'] == 2:
